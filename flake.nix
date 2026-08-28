@@ -37,6 +37,8 @@
           pkg-config,
           sqlite,
           ast-grep,
+          difftastic,
+          scc,
           # The `[proxy]` extra is upstream's documented "most common install":
           # it is what `headroom proxy` needs. Turn it off for a lean CLI that
           # only does local compression.
@@ -113,11 +115,23 @@
               ++ httpx.optional-dependencies.http2
             );
 
+          # `headroom tools` otherwise fetches prebuilt difft/scc/ast-grep
+          # binaries into a per-user cache, which will not run unpatched on
+          # NixOS. Splicing nixpkgs' builds into the wrapper's PATH makes
+          # `headroom diff`, `headroom loc` and `headroom sg` resolve them as
+          # already-installed ("on-path") tools and skips the download entirely.
+          # nixpkgs tracks these ahead of the versions in headroom's registry
+          # (difft 0.64, scc 3.5); both are backwards compatible for the flags
+          # headroom passes.
           makeWrapperArgs = [
             "--prefix"
             "PATH"
             ":"
-            (lib.makeBinPath [ ast-grep ])
+            (lib.makeBinPath [
+              ast-grep
+              difftastic
+              scc
+            ])
           ];
 
           # The upstream suite pulls models and hits the network; the import
@@ -163,6 +177,8 @@
             ruff
             nodejs # commitlint hooks
             ast-grep
+            difftastic
+            scc
           ];
         };
       });
