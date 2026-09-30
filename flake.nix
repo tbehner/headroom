@@ -22,12 +22,12 @@
       headroomPackage =
         {
           lib,
-          # Supplied as python313Packages at every call site below. headroom's
-          # own metadata drops litellm on 3.14 (`python_version < '3.14'`
-          # marker), and litellm is what prices compression for the dashboard's
-          # "Proxy $ Saved" tile — on 3.14 token savings still track but the
-          # dollar figure stays $0.00. nixpkgs' default python3 is already 3.14,
-          # so 3.13 has to be requested explicitly.
+          # Supplied as python313Packages at every call site below. headroom supports
+          # 3.10–3.14, but nixpkgs' default python3 is 3.14 and only the 3.13 package
+          # set is known to build the full dependency list here, so 3.13 is requested
+          # explicitly. (The original reason for the pin — litellm carrying a
+          # `python_version < '3.14'` marker, which left the dashboard's "Proxy $
+          # Saved" tile at $0.00 on 3.14 — is gone: litellm is unconditional again.)
           python3Packages,
           rustPlatform,
           cargo,
@@ -95,6 +95,11 @@
               opentelemetry-api
               pyyaml
               tomlkit
+              # A core (not `[proxy]`) dependency since 0.39.1 / GH #3831:
+              # headroom/proxy/ssl_context.py verifies upstream TLS through the OS
+              # trust store by default, so TLS-inspecting corporate roots (Zscaler
+              # et al) are honoured — hence it is needed even with withProxy = false.
+              truststore
             ]
             ++ lib.optionals withProxy (
               [
