@@ -36,6 +36,7 @@
           perl,
           pkg-config,
           sqlite,
+          oniguruma,
           ast-grep,
           difftastic,
           scc,
@@ -70,7 +71,14 @@
           # nixpkgs' cmake hook would try to configure the repo root itself.
           dontUseCmakeConfigure = true;
 
-          buildInputs = [ sqlite ];
+          # oniguruma is for onig_sys: cargoSetupHook exports
+          # RUSTONIG_SYSTEM_LIBONIG=1, so the crate links the system library
+          # through pkg-config rather than building its vendored copy, and
+          # fails outright when it is absent.
+          buildInputs = [
+            sqlite
+            oniguruma
+          ];
 
           # `ast-grep-cli` is the upstream PyPI wrapper around the ast-grep
           # binary and is not packaged in nixpkgs. headroom resolves the tool
@@ -78,11 +86,33 @@
           # missing, so drop the Python dep and wrap the real binary in instead.
           pythonRemoveDeps = [ "ast-grep-cli" ];
 
-          # Every version floor in pyproject.toml is satisfied by the locked
-          # nixpkgs, so no `pythonRelaxDeps` is needed. If a `nix flake update`
-          # lands a nixpkgs whose package sits below a floor, the runtime-deps
-          # check fails loudly at build time — add the offending name to a
-          # `pythonRelaxDeps` list here after confirming it is safe.
+          # Two floors in pyproject.toml sit above what the locked nixpkgs
+          # carries (click 8.4.2, opentelemetry-api 1.43.0), so the runtime-deps
+          # check fails without relaxing them. Both floors are there for a
+          # vulnerability, and neither affected code path is reachable from
+          # headroom:
+          #   * click >= 8.5.0 — PYSEC-2026-2132, command injection in
+          #     `click.edit()`. headroom never calls `click.edit()` or
+          #     `click.launch()`; the CLI only uses decorators, options and
+          #     `echo`.
+          #   * opentelemetry-api >= 1.45.1 — CVE-2026-114603, quadratic
+          #     tracestate parsing. headroom only emits spans and metrics
+          #     (observability/{tracing,metrics}.py); it never extracts context
+          #     from inbound headers, which is what parses a tracestate.
+          # Bumping the two packages here instead was tried and rejected: click
+          # is a test input deep under aiohttp and dask, so overriding it in the
+          # Python set rebuilds torch, pyarrow and transformers from source on
+          # every machine and every nixpkgs bump. Delete the entries once
+          # nixpkgs ships click 8.5 and opentelemetry-api 1.45 — the build then
+          # picks the fixed versions up on its own, and if a floor is still
+          # unmet the check prints the version nixpkgs has.
+          #
+          # Any other name the check rejects goes here only after the same
+          # confirmation that relaxing it is safe.
+          pythonRelaxDeps = [
+            "click"
+            "opentelemetry-api"
+          ];
 
           dependencies =
             with python3Packages;
